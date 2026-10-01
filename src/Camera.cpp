@@ -187,41 +187,14 @@ bool Camera::get_frame(int timeout)
         return false;
     }
 
-    MV_CC_PIXEL_CONVERT_PARAM stConvertParam;
-    memset(&stConvertParam, 0, sizeof(stConvertParam));
+    cv::Mat rawMat(stImageInfo.stFrameInfo.nHeight, 
+                   stImageInfo.stFrameInfo.nWidth, 
+                   CV_8UC3, 
+                   stImageInfo.pBufAddr);
 
-    int nConvertDataSize = stImageInfo.stFrameInfo.nWidth * stImageInfo.stFrameInfo.nHeight * 3;
-
-    unsigned char* pConvertedData = 
-    new unsigned char[stImageInfo.stFrameInfo.nWidth * stImageInfo.stFrameInfo.nHeight * 3];
-    
-    stConvertParam.nWidth = stImageInfo.stFrameInfo.nWidth;
-    stConvertParam.nHeight = stImageInfo.stFrameInfo.nHeight;
-    stConvertParam.pSrcData = stImageInfo.pBufAddr;
-    stConvertParam.nSrcDataLen = stImageInfo.stFrameInfo.nFrameLen;
-    stConvertParam.enSrcPixelType = stImageInfo.stFrameInfo.enPixelType;
-    stConvertParam.enDstPixelType = PixelType_Gvsp_BGR8_Packed;
-    stConvertParam.pDstBuffer = pConvertedData;
-    stConvertParam.nDstBufferSize = stImageInfo.stFrameInfo.nWidth * stImageInfo.stFrameInfo.nHeight * 3;
-
-    bool bConvertSuccess = false;
-    nRet = MV_CC_ConvertPixelType(m_handle, &stConvertParam);
-    if (check(nRet, "ConvertPixelType")) 
-    {
-        cv::Mat tempMat(stImageInfo.stFrameInfo.nHeight, stImageInfo.stFrameInfo.nWidth, CV_8UC3, pConvertedData);
-        frame = tempMat.clone();
-        bConvertSuccess = true;
-    }
-    else
-    {
-        std::cout << "转换失败！原始格式: 0x" << std::hex << stImageInfo.stFrameInfo.enPixelType 
-                  << ", 源宽高: " << std::dec << stImageInfo.stFrameInfo.nWidth << "x" << stImageInfo.stFrameInfo.nHeight 
-                  << ", 目标缓冲区大小: " << nConvertDataSize << std::endl;
-    }
+    cv::cvtColor(rawMat, frame, cv::COLOR_RGB2BGR);
 
     MV_CC_FreeImageBuffer(m_handle, &stImageInfo);
-
-    delete[] pConvertedData;
 
     return true;
 }
