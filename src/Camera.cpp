@@ -3,17 +3,49 @@
 #include <cstddef>
 #include <iostream>
 
+#include <opencv2/core/hal/interface.h>
 #include <opencv2/core/mat.hpp>
 #include <opencv2/opencv.hpp>
 #include <MvCameraControl.h>
+
+MV_CC_DEVICE_INFO_LIST m_stDeviceList;
+
+
+bool check(int nRet,std::string msg)
+{
+    if(nRet != MV_OK)
+    {
+        std::cerr<<msg<<" error"<<std::hex<<nRet<<std::dec<<std::endl;
+        return false;
+    }
+    return true;
+}
+
+bool SDK::initialize()
+{
+    int nRet = MV_CC_Initialize();
+    if(check(nRet,"sdk intialize"))
+    {
+        return false;
+    }
+    return true;
+}
+
+bool SDK::finalize()
+{
+    int nRet = MV_CC_Finalize();
+    if(check(nRet,"sdk finalize"))
+    {
+        return false;
+    }
+    return true;
+}
 
 Camera::Camera()
 {
     m_handle=nullptr;
     m_open=0;
     m_grabbing=0;
-    memset(&m_stDeviceList, 0, sizeof(MV_CC_DEVICE_INFO_LIST));
-    frame=cv::Mat();
 }
 
 Camera::~Camera()
@@ -21,18 +53,9 @@ Camera::~Camera()
     close();
 }
 
-bool Camera::check(int nRet,std::string msg)
+bool enum_device()
 {
-    if(nRet != MV_OK)
-    {
-        std::cout<<msg<<" error"<<std::hex<<nRet<<std::dec<<std::endl;
-        return false;
-    }
-    return true;
-}
-
-bool Camera::enum_device()
-{
+    memset(&m_stDeviceList, 0, sizeof(MV_CC_DEVICE_INFO_LIST));
     int nRet = MV_CC_EnumDevices(MV_GIGE_DEVICE|MV_USB_DEVICE, &m_stDeviceList);
     if(!check(nRet,"enum device"))return 0;
     
@@ -55,9 +78,9 @@ bool Camera::enum_device()
         return 0;
     }
     return 1;
-}
+} 
 
-bool Camera::open(unsigned int index)
+bool Camera::handle(unsigned int index)
 {
     if(index >= m_stDeviceList.nDeviceNum)
     {
@@ -68,7 +91,18 @@ bool Camera::open(unsigned int index)
     int nRet = MV_CC_CreateHandle(&m_handle, m_stDeviceList.pDeviceInfo[index]);
     if(!check(nRet,"creat handle"))return false;
 
-    nRet = MV_CC_OpenDevice(m_handle);
+    return true;
+}
+
+bool Camera::open(unsigned int index)
+{
+    if(index >= m_stDeviceList.nDeviceNum)
+    {
+        std::cout<<"index out of range"<<std::endl;
+        return false;
+    }
+
+    int nRet = MV_CC_OpenDevice(m_handle);
     if(!check(nRet,"open"))
     {
         MV_CC_DestroyHandle(m_handle);
@@ -81,8 +115,29 @@ bool Camera::open(unsigned int index)
     return true;
 }
 
-void Camera::set_exposure_time(double exposure_time)
+bool Camera::get_open()const
 {
+    bool open = m_open;
+    return open;
+}
+
+bool Camera::get_grabbing()const
+{
+    bool grabbing = m_grabbing;
+    return grabbing;
+}
+
+void* Camera::get_handle()const
+{
+    void* handle = m_handle;
+    return handle;
+}
+
+void set_exposure_time(double exposure_time,const Camera& a)
+{
+    bool m_open = a.get_open();
+    bool m_grabbing = a.get_grabbing();
+    void* m_handle = a.get_handle();
     if(m_open == false || m_grabbing == true)
     {
         std::cout<<"device not open or grabbing"<<std::endl;
@@ -98,8 +153,11 @@ void Camera::set_exposure_time(double exposure_time)
     check(nRet,"set exposure time");
 }
 
-void Camera::set_gain(double gain)
+void set_gain(double gain,const Camera& a)
 {
+    bool m_open = a.get_open();
+    bool m_grabbing = a.get_grabbing();
+    void* m_handle = a.get_handle();
     if(m_open == false || m_grabbing == true)
     {
         std::cout<<"device not open or grabbing"<<std::endl;
@@ -135,6 +193,8 @@ bool Camera::start_grabbing()
     int nRet = MV_CC_StartGrabbing(m_handle);
     if (!check(nRet, "StartGrabbing"))
     {
+        MV_CC_DestroyHandle(m_handle);
+        m_handle=nullptr;
         return false;
     }
 
@@ -166,12 +226,13 @@ bool Camera::stop_grabbing()
     return true;
 }
 
-bool Camera::get_frame(int timeout)
+cv::Mat Camera::get_frame(int timeout)
 {
+    cv::Mat frame;
     if(m_grabbing == false)
     {
         std::cout<<"not grabbing"<<std::endl;
-        return false;
+        frame.empty();
     }
 
     MV_FRAME_OUT stImageInfo;
@@ -184,24 +245,20 @@ bool Camera::get_frame(int timeout)
         {
             check(nRet, "GetImageBuffer");
         }
-        return false;
+        frame.empty();
     }
 
     cv::Mat rawMat(stImageInfo.stFrameInfo.nHeight, 
                    stImageInfo.stFrameInfo.nWidth, 
-                   CV_8UC3, 
-                   stImageInfo.pBufAddr);
-
-    cv::cvtColor(rawMat, frame, cv::COLOR_RGB2BGR);
+                   CV_8UC1, 
+                   stImageInfo.pBufAddr,
+                   stImageInfo.stFrameInfo.nWidth);
+                   
+    cv::cvtColor(rawMat, frame, cv::COLOR_BayerBG2BGR);
 
     MV_CC_FreeImageBuffer(m_handle, &stImageInfo);
 
-    return true;
-}
-
-void Camera::read_frame(cv::Mat& frame_copy)
-{
-    frame_copy = frame.clone();
+    return frame;
 }
 
 bool Camera::close()
@@ -229,11 +286,6 @@ bool Camera::close()
     }
     
     memset(&m_stDeviceList, 0, sizeof(MV_CC_DEVICE_INFO_LIST));
-
-    if(!frame.empty())
-    {
-        frame.release();
-    }
 
     std::cout << "Camera closed" << std::endl;
 

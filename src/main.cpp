@@ -2,55 +2,42 @@
 
 #include <iostream>
 #include <csignal>
-#include <atomic>
 
 #include <opencv2/opencv.hpp>
 #include <MvCameraControl.h>
 
-std::atomic<bool> g_running{true};
-void signalHandler(int signum) 
-{
-    g_running = false; 
-}
-
 int main()
 {
-    signal(SIGINT, signalHandler);
+    SDK sdk;
+    sdk.initialize();
 
-    int nRet = MV_OK;
-     
-    nRet =MV_CC_Initialize(); 
-    if(nRet != MV_OK)
+    Camera camera;
+    if(!enum_device())
     {
-        std::cout<<"MV_CC_Initialize fail"<<std::endl;
+        sdk.finalize();
         return -1;
     }
 
-    Camera camera;
-    if(!camera.enum_device())
+    if(!camera.handle(0))
     {
-        MV_CC_Finalize();
         return -1;
     }
 
     if(camera.open(0))
     {
-        camera.set_exposure_time(10000);
-        camera.set_gain(10);
+        set_exposure_time(10000,camera);
+        set_gain(10, camera);
 
         if(camera.start_grabbing())
         {
             std::cout<<"start grabbing.Press q to quit"<<std::endl;
-            while(g_running)
+            while(true)
             {
-                if(camera.get_frame(1000))
+                cv::Mat frame;
+                frame = camera.get_frame(1000);
+                if(!frame.empty())
                 {
-                    cv::Mat frame;
-                    camera.read_frame(frame);
-                    if(!frame.empty())
-                    {
-                        cv::imshow("frame",frame);
-                    }
+                    cv::imshow("frame",frame);
                 }
                 else
                 {
@@ -61,7 +48,7 @@ int main()
                 if(key=='q'||key=='Q')
                 {
                     std::cout<<"Exit"<<std::endl;
-                    g_running = false;
+                    break;
                 }
             }
             camera.stop_grabbing();
@@ -70,10 +57,6 @@ int main()
         camera.close();
     }
 
-    nRet =  MV_CC_Finalize();
-    if(nRet != MV_OK)
-    {
-        std::cout<<"MV_CC_Finalize fail"<<std::endl;
-    }
+    sdk.finalize();
     return 0;
 }
