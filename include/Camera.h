@@ -1,6 +1,20 @@
 #include <opencv2/core/cuda.hpp>
 #include <opencv2/opencv.hpp>
 
+class Camera;
+
+class Controller
+{
+public:
+    bool enum_device();
+
+    static bool check(int nRet,std::string msg);
+
+    void set_exposure_time(double exposure_time,Camera& a);
+
+    void set_gain(double gain,Camera& a);
+};
+
 class SDK
 {
 public:
@@ -19,13 +33,9 @@ public:
     bool open(unsigned int index);
     bool close();
 
-    bool enum_device();
-
-    bool check(int nRet,std::string msg);
-
-    void set_exposure_time(double exposure_time,const Camera& a);
-
-    void set_gain(double gain,const Camera& a);
+    bool get_open()const;
+    bool get_grabbing()const;
+    void* get_handle()const;
     
     bool start_grabbing();
     bool stop_grabbing();

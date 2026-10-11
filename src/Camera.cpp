@@ -1,5 +1,4 @@
 #include "Camera.h"
-#include "MvErrorDefine.h"
 
 #include <cstddef>
 #include <iostream>
@@ -8,12 +7,11 @@
 #include <opencv2/core/mat.hpp>
 #include <opencv2/opencv.hpp>
 #include <MvCameraControl.h>
-#include <ostream>
 
 MV_CC_DEVICE_INFO_LIST m_stDeviceList;
 
 
-bool Camera::check(int nRet,std::string msg)
+bool Controller::check(int nRet,std::string msg)
 {
     if(nRet != MV_OK)
     {
@@ -26,9 +24,8 @@ bool Camera::check(int nRet,std::string msg)
 bool SDK::initialize()
 {
     int nRet = MV_CC_Initialize();
-    if(nRet!=MV_OK)
+    if(Controller::check(nRet,"sdk intialize"))
     {
-        std::cerr<<"sdk initialize failed"<<std::endl;
         return false;
     }
     return true;
@@ -37,9 +34,8 @@ bool SDK::initialize()
 bool SDK::finalize()
 {
     int nRet = MV_CC_Finalize();
-    if(nRet!=MV_OK)
+    if(Controller::check(nRet,"sdk finalize"))
     {
-        std::cerr<<"sdk finalize failed"<<std::endl;
         return false;
     }
     return true;
@@ -57,7 +53,7 @@ Camera::~Camera()
     close();
 }
 
-bool Camera::enum_device()
+bool Controller::enum_device()
 {
     memset(&m_stDeviceList, 0, sizeof(MV_CC_DEVICE_INFO_LIST));
     int nRet = MV_CC_EnumDevices(MV_GIGE_DEVICE|MV_USB_DEVICE, &m_stDeviceList);
@@ -93,7 +89,7 @@ bool Camera::handle(unsigned int index)
     }
     
     int nRet = MV_CC_CreateHandle(&m_handle, m_stDeviceList.pDeviceInfo[index]);
-    if(!check(nRet,"creat handle"))return false;
+    if(!Controller::check(nRet,"creat handle"))return false;
 
     return true;
 }
@@ -107,7 +103,7 @@ bool Camera::open(unsigned int index)
     }
 
     int nRet = MV_CC_OpenDevice(m_handle);
-    if(!check(nRet,"open"))
+    if(!Controller::check(nRet,"open"))
     {
         MV_CC_DestroyHandle(m_handle);
         m_handle=nullptr;
@@ -119,9 +115,29 @@ bool Camera::open(unsigned int index)
     return true;
 }
 
-void Camera::set_exposure_time(double exposure_time,const Camera& a)
+bool Camera::get_open()const
 {
+    bool open = m_open;
+    return open;
+}
 
+bool Camera::get_grabbing()const
+{
+    bool grabbing = m_grabbing;
+    return grabbing;
+}
+
+void* Camera::get_handle()const
+{
+    void* handle = m_handle;
+    return handle;
+}
+
+void Controller::set_exposure_time(double exposure_time,Camera& a)
+{
+    bool m_open = a.get_open();
+    bool m_grabbing = a.get_grabbing();
+    void* m_handle = a.get_handle();
     if(m_open == false || m_grabbing == true)
     {
         std::cout<<"device not open or grabbing"<<std::endl;
@@ -134,11 +150,14 @@ void Camera::set_exposure_time(double exposure_time,const Camera& a)
     MV_CC_GetFloatValue(m_handle, strNodeName , &exposure_time_value);
 
     int nRet = MV_CC_SetFloatValue(m_handle, strNodeName, exposure_time);
-    check(nRet,"set exposure time");
+    Controller::check(nRet,"set exposure time");
 }
 
-void Camera::set_gain(double gain,const Camera& a)
+void Controller::set_gain(double gain,Camera& a)
 {
+    bool m_open = a.get_open();
+    bool m_grabbing = a.get_grabbing();
+    void* m_handle = a.get_handle();
     if(m_open == false || m_grabbing == true)
     {
         std::cout<<"device not open or grabbing"<<std::endl;
@@ -151,7 +170,7 @@ void Camera::set_gain(double gain,const Camera& a)
     MV_CC_GetFloatValue(m_handle, strNodeName , &gain_value);
 
     int nRet = MV_CC_SetFloatValue(m_handle, strNodeName, gain);
-    check(nRet,"set gain");
+    Controller::check(nRet,"set gain");
 }
 
 bool Camera::start_grabbing()
@@ -172,7 +191,7 @@ bool Camera::start_grabbing()
     MV_CC_SetImageNodeNum(m_handle, 5);
 
     int nRet = MV_CC_StartGrabbing(m_handle);
-    if (!check(nRet, "StartGrabbing"))
+    if (!Controller::check(nRet, "StartGrabbing"))
     {
         MV_CC_DestroyHandle(m_handle);
         m_handle=nullptr;
@@ -198,7 +217,7 @@ bool Camera::stop_grabbing()
     }
 
     int nRet = MV_CC_StopGrabbing(m_handle);
-    if (!check(nRet, "StopGrabbing"))
+    if (!Controller::check(nRet, "StopGrabbing"))
     {
         return false;
     }
@@ -224,7 +243,7 @@ cv::Mat Camera::get_frame(int timeout)
     {
         if (nRet != MV_E_NODATA && nRet != MV_E_NOENOUGH_BUF) 
         {
-            check(nRet, "GetImageBuffer");
+            Controller::check(nRet, "GetImageBuffer");
         }
         frame.empty();
     }
@@ -256,13 +275,13 @@ bool Camera::close()
     if(m_open != false|| m_handle != nullptr)
     {
         nRet = MV_CC_CloseDevice(m_handle);
-        check(nRet,"close");
+        Controller::check(nRet,"close");
         m_open=false;
     }
     if(m_handle != nullptr)
     {
         nRet = MV_CC_DestroyHandle(m_handle);
-        check(nRet,"destroyhandle");
+        Controller::check(nRet,"destroyhandle");
         m_handle=nullptr;
     }
     

@@ -8,11 +8,14 @@
 
 int main()
 {
+    Controller controller;
+
     SDK sdk;
     sdk.initialize();
 
     Camera camera;
-    if(!camera.enum_device())
+
+    if(!controller.enum_device())
     {
         sdk.finalize();
         return -1;
@@ -25,8 +28,8 @@ int main()
 
     if(camera.open(0))
     {
-        camera.set_exposure_time(10000,camera);
-        camera.set_gain(10, camera);
+        controller.set_exposure_time(10000,camera);
+        controller.set_gain(10, camera);
 
         if(camera.start_grabbing())
         {
