@@ -12,7 +12,7 @@ int main()
     sdk.initialize();
 
     Camera camera;
-    if(!enum_device())
+    if(!camera.enum_device())
     {
         sdk.finalize();
         return -1;
@@ -25,8 +25,8 @@ int main()
 
     if(camera.open(0))
     {
-        set_exposure_time(10000,camera);
-        set_gain(10, camera);
+        camera.set_exposure_time(10000,camera);
+        camera.set_gain(10, camera);
 
         if(camera.start_grabbing())
         {

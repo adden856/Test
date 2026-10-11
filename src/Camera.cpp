@@ -1,4 +1,5 @@
 #include "Camera.h"
+#include "MvErrorDefine.h"
 
 #include <cstddef>
 #include <iostream>
@@ -7,11 +8,12 @@
 #include <opencv2/core/mat.hpp>
 #include <opencv2/opencv.hpp>
 #include <MvCameraControl.h>
+#include <ostream>
 
 MV_CC_DEVICE_INFO_LIST m_stDeviceList;
 
 
-bool check(int nRet,std::string msg)
+bool Camera::check(int nRet,std::string msg)
 {
     if(nRet != MV_OK)
     {
@@ -24,8 +26,9 @@ bool check(int nRet,std::string msg)
 bool SDK::initialize()
 {
     int nRet = MV_CC_Initialize();
-    if(check(nRet,"sdk intialize"))
+    if(nRet!=MV_OK)
     {
+        std::cerr<<"sdk initialize failed"<<std::endl;
         return false;
     }
     return true;
@@ -34,8 +37,9 @@ bool SDK::initialize()
 bool SDK::finalize()
 {
     int nRet = MV_CC_Finalize();
-    if(check(nRet,"sdk finalize"))
+    if(nRet!=MV_OK)
     {
+        std::cerr<<"sdk finalize failed"<<std::endl;
         return false;
     }
     return true;
@@ -53,7 +57,7 @@ Camera::~Camera()
     close();
 }
 
-bool enum_device()
+bool Camera::enum_device()
 {
     memset(&m_stDeviceList, 0, sizeof(MV_CC_DEVICE_INFO_LIST));
     int nRet = MV_CC_EnumDevices(MV_GIGE_DEVICE|MV_USB_DEVICE, &m_stDeviceList);
@@ -115,29 +119,9 @@ bool Camera::open(unsigned int index)
     return true;
 }
 
-bool Camera::get_open()const
+void Camera::set_exposure_time(double exposure_time,const Camera& a)
 {
-    bool open = m_open;
-    return open;
-}
 
-bool Camera::get_grabbing()const
-{
-    bool grabbing = m_grabbing;
-    return grabbing;
-}
-
-void* Camera::get_handle()const
-{
-    void* handle = m_handle;
-    return handle;
-}
-
-void set_exposure_time(double exposure_time,const Camera& a)
-{
-    bool m_open = a.get_open();
-    bool m_grabbing = a.get_grabbing();
-    void* m_handle = a.get_handle();
     if(m_open == false || m_grabbing == true)
     {
         std::cout<<"device not open or grabbing"<<std::endl;
@@ -153,11 +137,8 @@ void set_exposure_time(double exposure_time,const Camera& a)
     check(nRet,"set exposure time");
 }
 
-void set_gain(double gain,const Camera& a)
+void Camera::set_gain(double gain,const Camera& a)
 {
-    bool m_open = a.get_open();
-    bool m_grabbing = a.get_grabbing();
-    void* m_handle = a.get_handle();
     if(m_open == false || m_grabbing == true)
     {
         std::cout<<"device not open or grabbing"<<std::endl;
