@@ -9,10 +9,6 @@ public:
     bool enum_device();
 
     static bool check(int nRet,std::string msg);
-
-    void set_exposure_time(double exposure_time,Camera& a);
-
-    void set_gain(double gain,Camera& a);
 };
 
 class SDK
@@ -35,10 +31,13 @@ public:
 
     bool get_open()const;
     bool get_grabbing()const;
-    void* get_handle()const;
     
     bool start_grabbing();
     bool stop_grabbing();
+
+    void set_exposure_time(double exposure_time);
+
+    void set_gain(double gain);
 
     cv::Mat get_frame(int timeout);
 

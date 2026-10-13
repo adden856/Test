@@ -78,20 +78,6 @@ bool Controller::enum_device()
         return 0;
     }
     return 1;
-} 
-
-bool Camera::handle(unsigned int index)
-{
-    if(index >= m_stDeviceList.nDeviceNum)
-    {
-        std::cout<<"index out of range"<<std::endl;
-        return false;
-    }
-    
-    int nRet = MV_CC_CreateHandle(&m_handle, m_stDeviceList.pDeviceInfo[index]);
-    if(!Controller::check(nRet,"creat handle"))return false;
-
-    return true;
 }
 
 bool Camera::open(unsigned int index)
@@ -127,17 +113,22 @@ bool Camera::get_grabbing()const
     return grabbing;
 }
 
-void* Camera::get_handle()const
+bool Camera::handle(unsigned int index)
 {
-    void* handle = m_handle;
-    return handle;
+    if(index >= m_stDeviceList.nDeviceNum)
+    {
+        std::cout<<"index out of range"<<std::endl;
+        return false;
+    }
+    
+    int nRet = MV_CC_CreateHandle(&m_handle, m_stDeviceList.pDeviceInfo[index]);
+    if(!Controller::check(nRet,"creat handle"))return false;
+
+    return true;
 }
 
-void Controller::set_exposure_time(double exposure_time,Camera& a)
+void Camera::set_exposure_time(double exposure_time)
 {
-    bool m_open = a.get_open();
-    bool m_grabbing = a.get_grabbing();
-    void* m_handle = a.get_handle();
     if(m_open == false || m_grabbing == true)
     {
         std::cout<<"device not open or grabbing"<<std::endl;
@@ -153,11 +144,9 @@ void Controller::set_exposure_time(double exposure_time,Camera& a)
     Controller::check(nRet,"set exposure time");
 }
 
-void Controller::set_gain(double gain,Camera& a)
+void Camera::set_gain(double gain)
 {
-    bool m_open = a.get_open();
-    bool m_grabbing = a.get_grabbing();
-    void* m_handle = a.get_handle();
+
     if(m_open == false || m_grabbing == true)
     {
         std::cout<<"device not open or grabbing"<<std::endl;

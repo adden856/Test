@@ -28,8 +28,9 @@ int main()
 
     if(camera.open(0))
     {
-        controller.set_exposure_time(10000,camera);
-        controller.set_gain(10, camera);
+  
+        camera.set_exposure_time(10000);
+        camera.set_gain(10);
 
         if(camera.start_grabbing())
         {
