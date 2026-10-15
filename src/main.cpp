@@ -4,29 +4,24 @@
 #include <csignal>
 
 #include <opencv2/opencv.hpp>
-#include <MvCameraControl.h>
 
 int main()
 {
-    Controller controller;
-
     SDK sdk;
-    sdk.initialize();
-
+    Controller controller;
     Camera camera;
 
     if(!controller.enum_device())
     {
-        sdk.finalize();
         return -1;
     }
 
-    if(!camera.handle(0))
+    if(!camera.handle(controller,0))
     {
         return -1;
     }
 
-    if(camera.open(0))
+    if(camera.open(controller,0))
     {
   
         camera.set_exposure_time(10000);
@@ -57,10 +52,7 @@ int main()
             }
             camera.stop_grabbing();
         }
-
         camera.close();
     }
-
-    sdk.finalize();
     return 0;
 }

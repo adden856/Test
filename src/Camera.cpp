@@ -1,15 +1,43 @@
 #include "Camera.h"
+#include "CameraParams.h"
 
 #include <cstddef>
 #include <iostream>
 
+#include <memory>
 #include <opencv2/core/hal/interface.h>
 #include <opencv2/core/mat.hpp>
 #include <opencv2/opencv.hpp>
 #include <MvCameraControl.h>
+#include <ostream>
 
-MV_CC_DEVICE_INFO_LIST m_stDeviceList;
+void Camera::Deleter::operator()(void* h)const
+{
+    if(h)MV_CC_DestroyHandle(h);
+}
 
+struct Controller::Impl
+{
+    MV_CC_DEVICE_INFO_LIST list{};
+    bool enumerated = false;
+};
+
+Controller::Controller()
+{
+    m_impl=std::make_unique<Impl>();
+}
+
+Controller::~Controller()=default;
+
+SDK::SDK()
+{  
+    initialize();
+}
+
+SDK::~SDK()
+{
+    finalize();
+}
 
 bool Controller::check(int nRet,std::string msg)
 {
@@ -41,35 +69,32 @@ bool SDK::finalize()
     return true;
 }
 
-Camera::Camera()
-{
-    m_handle=nullptr;
-    m_open=0;
-    m_grabbing=0;
-}
+Camera::Camera()=default;
 
 Camera::~Camera()
 {
     close();
 }
 
-bool Controller::enum_device()
+bool Controller::enum_device()const
 {
-    memset(&m_stDeviceList, 0, sizeof(MV_CC_DEVICE_INFO_LIST));
-    int nRet = MV_CC_EnumDevices(MV_GIGE_DEVICE|MV_USB_DEVICE, &m_stDeviceList);
+    if(m_impl->enumerated)return true;
+
+    memset(&m_impl->list,0,sizeof(m_impl->list));
+    int nRet = MV_CC_EnumDevices(MV_GIGE_DEVICE|MV_USB_DEVICE, &m_impl->list);
     if(!check(nRet,"enum device"))return 0;
     
-    if (m_stDeviceList.nDeviceNum > 0)
+    if (m_impl->list.nDeviceNum > 0)
     {
-        for (int i = 0; i < m_stDeviceList.nDeviceNum; i++)
+        for (int i = 0; i < m_impl->list.nDeviceNum; i++)
         {
             std::cout<<"device "<<i<<std::endl;
-            MV_CC_DEVICE_INFO* pDeviceInfo = m_stDeviceList.pDeviceInfo[i];
+            MV_CC_DEVICE_INFO* pDeviceInfo = m_impl->list.pDeviceInfo[i];
             if (NULL == pDeviceInfo)
             {
                 break;
             } 
-            std::cout<<"DeviceTypeInfo:"<<pDeviceInfo->nDevTypeInfo<<std::endl;          
+            std::cout<<"DeviceTypeInfo:"<<pDeviceInfo->nTLayerType<<std::endl;          
         }  
     } 
     else
@@ -77,22 +102,37 @@ bool Controller::enum_device()
         std::cout<<"Find No Devices!\n"<<std::endl;
         return 0;
     }
+    m_impl->enumerated=true;
     return 1;
 }
 
-bool Camera::open(unsigned int index)
+unsigned Controller::device_num()const
 {
-    if(index >= m_stDeviceList.nDeviceNum)
+    return m_impl->list.nDeviceNum;
+}
+
+void* Controller::device_info(unsigned index)const
+{
+    if(index>=m_impl->list.nDeviceNum || m_impl->list.pDeviceInfo[index] == nullptr)
+    {
+        return nullptr;
+    }
+    return static_cast<void*>(m_impl->list.pDeviceInfo[index]);
+}
+
+bool Camera::open(Controller& ctrl,unsigned int index)
+{
+    unsigned num =ctrl.device_num();
+    if(index >= num)
     {
         std::cout<<"index out of range"<<std::endl;
         return false;
     }
 
-    int nRet = MV_CC_OpenDevice(m_handle);
+    int nRet = MV_CC_OpenDevice(m_handle.get());
     if(!Controller::check(nRet,"open"))
     {
-        MV_CC_DestroyHandle(m_handle);
-        m_handle=nullptr;
+        m_handle.reset();
         return false;
     }
 
@@ -113,17 +153,27 @@ bool Camera::get_grabbing()const
     return grabbing;
 }
 
-bool Camera::handle(unsigned int index)
+bool Camera::handle(Controller& ctrl,unsigned int index)
 {
-    if(index >= m_stDeviceList.nDeviceNum)
+    unsigned num = ctrl.device_num();
+    const void* info = ctrl.device_info(index);
+    if(index >= num)
     {
         std::cout<<"index out of range"<<std::endl;
         return false;
     }
     
-    int nRet = MV_CC_CreateHandle(&m_handle, m_stDeviceList.pDeviceInfo[index]);
+    auto* sdkInfo = static_cast<const MV_CC_DEVICE_INFO*>(info);
+
+    void* raw=nullptr;
+    int nRet = MV_CC_CreateHandle(&raw, sdkInfo);
     if(!Controller::check(nRet,"creat handle"))return false;
 
+    m_handle.reset(raw);
+    if(m_handle.get()==nullptr){
+        std::cerr<<"gethandle false"<<std::endl;
+        return false;
+    }
     return true;
 }
 
@@ -138,9 +188,9 @@ void Camera::set_exposure_time(double exposure_time)
     const char* strNodeName = "ExposureTime";
 
     MVCC_FLOATVALUE exposure_time_value;
-    MV_CC_GetFloatValue(m_handle, strNodeName , &exposure_time_value);
+    MV_CC_GetFloatValue(m_handle.get(), strNodeName , &exposure_time_value);
 
-    int nRet = MV_CC_SetFloatValue(m_handle, strNodeName, exposure_time);
+    int nRet = MV_CC_SetFloatValue(m_handle.get(), strNodeName, exposure_time);
     Controller::check(nRet,"set exposure time");
 }
 
@@ -156,9 +206,9 @@ void Camera::set_gain(double gain)
     const char* strNodeName = "Gain";
 
     MVCC_FLOATVALUE gain_value;
-    MV_CC_GetFloatValue(m_handle, strNodeName , &gain_value);
+    MV_CC_GetFloatValue(m_handle.get(), strNodeName , &gain_value);
 
-    int nRet = MV_CC_SetFloatValue(m_handle, strNodeName, gain);
+    int nRet = MV_CC_SetFloatValue(m_handle.get(), strNodeName, gain);
     Controller::check(nRet,"set gain");
 }
 
@@ -175,15 +225,14 @@ bool Camera::start_grabbing()
         return true;
     }
 
-    MV_CC_SetEnumValue(m_handle, "TriggerMode", 0); 
+    MV_CC_SetEnumValue(m_handle.get(), "TriggerMode", 0); 
 
-    MV_CC_SetImageNodeNum(m_handle, 5);
+    MV_CC_SetImageNodeNum(m_handle.get(), 5);
 
-    int nRet = MV_CC_StartGrabbing(m_handle);
+    int nRet = MV_CC_StartGrabbing(m_handle.get());
     if (!Controller::check(nRet, "StartGrabbing"))
     {
-        MV_CC_DestroyHandle(m_handle);
-        m_handle=nullptr;
+        m_handle.reset();
         return false;
     }
 
@@ -205,7 +254,7 @@ bool Camera::stop_grabbing()
         return false;
     }
 
-    int nRet = MV_CC_StopGrabbing(m_handle);
+    int nRet = MV_CC_StopGrabbing(m_handle.get());
     if (!Controller::check(nRet, "StopGrabbing"))
     {
         return false;
@@ -227,7 +276,7 @@ cv::Mat Camera::get_frame(int timeout)
     MV_FRAME_OUT stImageInfo;
     memset(&stImageInfo, 0, sizeof(MV_FRAME_OUT));
 
-    int nRet = MV_CC_GetImageBuffer(m_handle, &stImageInfo, timeout);
+    int nRet = MV_CC_GetImageBuffer(m_handle.get(), &stImageInfo, timeout);
     if (nRet != MV_OK) 
     {
         if (nRet != MV_E_NODATA && nRet != MV_E_NOENOUGH_BUF) 
@@ -245,7 +294,7 @@ cv::Mat Camera::get_frame(int timeout)
                    
     cv::cvtColor(rawMat, frame, cv::COLOR_BayerBG2BGR);
 
-    MV_CC_FreeImageBuffer(m_handle, &stImageInfo);
+    MV_CC_FreeImageBuffer(m_handle.get(), &stImageInfo);
 
     return frame;
 }
@@ -263,18 +312,14 @@ bool Camera::close()
 
     if(m_open != false|| m_handle != nullptr)
     {
-        nRet = MV_CC_CloseDevice(m_handle);
+        nRet = MV_CC_CloseDevice(m_handle.get());
         Controller::check(nRet,"close");
         m_open=false;
     }
     if(m_handle != nullptr)
     {
-        nRet = MV_CC_DestroyHandle(m_handle);
-        Controller::check(nRet,"destroyhandle");
-        m_handle=nullptr;
+        m_handle.reset();
     }
-    
-    memset(&m_stDeviceList, 0, sizeof(MV_CC_DEVICE_INFO_LIST));
 
     std::cout << "Camera closed" << std::endl;
 

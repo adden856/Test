@@ -1,21 +1,36 @@
+
+#include <memory>
 #include <opencv2/core/cuda.hpp>
 #include <opencv2/opencv.hpp>
 
-class Camera;
-
 class Controller
 {
+    struct Impl;
+    std::unique_ptr<Impl> m_impl;
 public:
-    bool enum_device();
+    Controller();
+    ~Controller();
+
+    Controller(const Controller&)=default;
+    Controller& operator=(const Controller&)=delete;
+
+    bool enum_device()const;
+
+    unsigned device_num()const;
+
+    void* device_info(unsigned index)const;
 
     static bool check(int nRet,std::string msg);
 };
 
 class SDK
 {
-public:
     bool initialize();
     bool finalize();
+
+public:
+    SDK();
+    ~SDK();
 };
 
 class Camera
@@ -24,9 +39,9 @@ public:
     Camera();
     ~Camera();
     
-    bool handle(unsigned int index);
+    bool handle(Controller& ctrl,unsigned int index);
 
-    bool open(unsigned int index);
+    bool open(Controller& ctrl,unsigned int index);
     bool close();
 
     bool get_open()const;
@@ -41,11 +56,14 @@ public:
 
     cv::Mat get_frame(int timeout);
 
-private:
-    void* m_handle;
-    bool m_open;
-    bool m_grabbing;
-
     Camera(const Camera&) = delete;
     Camera& operator=(const Camera&) = delete;
+
+private:
+    struct Deleter{void operator()(void* h)const;};
+
+    std::unique_ptr<void,Deleter> m_handle {nullptr};
+    bool m_open = 0;
+    bool m_grabbing = 0;
+
 };
