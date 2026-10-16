@@ -7,7 +7,6 @@
 
 int main()
 {
-    SDK sdk;
     Controller controller;
     Camera camera;
 

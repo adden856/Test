@@ -11,7 +11,7 @@ public:
     Controller();
     ~Controller();
 
-    Controller(const Controller&)=default;
+    Controller(const Controller&)=delete;
     Controller& operator=(const Controller&)=delete;
 
     bool enum_device()const;
@@ -21,16 +21,6 @@ public:
     void* device_info(unsigned index)const;
 
     static bool check(int nRet,std::string msg);
-};
-
-class SDK
-{
-    bool initialize();
-    bool finalize();
-
-public:
-    SDK();
-    ~SDK();
 };
 
 class Camera

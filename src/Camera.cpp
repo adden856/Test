@@ -22,34 +22,8 @@ struct Controller::Impl
     bool enumerated = false;
 };
 
-Controller::Controller()
-{
-    m_impl=std::make_unique<Impl>();
-}
 
-Controller::~Controller()=default;
-
-SDK::SDK()
-{  
-    initialize();
-}
-
-SDK::~SDK()
-{
-    finalize();
-}
-
-bool Controller::check(int nRet,std::string msg)
-{
-    if(nRet != MV_OK)
-    {
-        std::cerr<<msg<<" error"<<std::hex<<nRet<<std::dec<<std::endl;
-        return false;
-    }
-    return true;
-}
-
-bool SDK::initialize()
+static inline bool sdkinitialize()
 {
     int nRet = MV_CC_Initialize();
     if(Controller::check(nRet,"sdk intialize"))
@@ -59,11 +33,29 @@ bool SDK::initialize()
     return true;
 }
 
-bool SDK::finalize()
+static inline bool sdkfinalize()
 {
     int nRet = MV_CC_Finalize();
     if(Controller::check(nRet,"sdk finalize"))
     {
+        return false;
+    }
+    return true;
+}
+
+Controller::Controller()
+{
+    sdkinitialize();
+    m_impl=std::make_unique<Impl>();
+}
+
+Controller::~Controller(){sdkfinalize();};
+
+bool Controller::check(int nRet,std::string msg)
+{
+    if(nRet != MV_OK)
+    {
+        std::cerr<<msg<<" error"<<std::hex<<nRet<<std::dec<<std::endl;
         return false;
     }
     return true;
